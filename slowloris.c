@@ -41,7 +41,7 @@ char gen_rand8(int lbound, int ubound){
  * Network Functions
  ******************************************************************************/
 
-void init_socket(int *sock_fd, struct sockaddr_in *server, char *ip){
+void init_socket(int *sock_fd, struct sockaddr_in *server, char *ip, int port){
 	//struct hostent *host;
 
 	*sock_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -58,7 +58,7 @@ void init_socket(int *sock_fd, struct sockaddr_in *server, char *ip){
 
 	server->sin_family = AF_INET;
 	server->sin_addr.s_addr = inet_addr(ip);
-	server->sin_port = htons(80);
+	server->sin_port = htons(port);
 }
 
 /*******************************************************************************
@@ -72,7 +72,7 @@ void *loris(void *_arg){
 
 	printf("[%i] started.\n", b->thread_num);
 
-	init_socket(&sockfd, &server, b->target_ip);
+	init_socket(&sockfd, &server, b->target_ip, b->target_port);
 
 	if(connect(sockfd, (struct sockaddr*)&server, sizeof(server)) < 0){
 		perror("Error connecting to target");
